@@ -1,0 +1,40 @@
+rubric:
+  - criterion: caption_completeness
+    weight: 20
+    scoring:
+      20: "full caption verbatim, hashtags intact"
+      10: "caption truncated or hashtags missing"
+      0: "caption absent or fabricated"
+  - criterion: transcript_accuracy
+    weight: 25
+    scoring:
+      25: "spoken words >=95% match audio (sampled spot-check)"
+      15: "80-95% match"
+      5: "partial/garbled"
+      0: "missing or hallucinated"
+  - criterion: onscreen_text_coverage
+    weight: 25
+    scoring:
+      25: "all distinct on-screen text captured, in order"
+      15: ">70% captured"
+      5: "sporadic"
+      0: "none"
+  - criterion: metadata_accuracy
+    weight: 10
+    scoring:
+      10: "all metadata fields correct"
+      0: "any fabricated field"
+  - criterion: formatting
+    weight: 10
+    scoring:
+      10: "matches template exactly"
+      5: "minor deviations"
+      0: "broken structure"
+  - criterion: no_hallucination
+    weight: 10
+    scoring:
+      10: "0 unsupported claims"
+      0: "any fabricated content"
+thresholds:
+  publish: 85
+  retry: 60
