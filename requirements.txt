@@ -6,8 +6,11 @@ pydantic
 python-multipart
 websockets
 google-adk
+yt-dlp
 openai-whisper
 pytesseract
 pillow
 pyyaml
 requests
+playwright
+imageio-ffmpeg

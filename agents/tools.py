@@ -1,5 +1,8 @@
 """Tool implementations: yt-dlp, ffmpeg, tesseract, whisper wrappers."""
 import json, os, random, subprocess, time
+import imageio_ffmpeg
+
+os.environ["PATH"] += os.pathsep + os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
 
 COOKIES = "credentials/cookies.txt"
 TMP = "storage/tmp"
@@ -57,9 +60,9 @@ def ocr_frames(frames: list) -> list:
     return results
 
 def transcribe_audio(video_path: str, shortcode: str) -> dict:
-    """Transcribe with whisper small; returns segments with confidences."""
+    """Transcribe with whisper tiny; returns segments with confidences."""
     import whisper
-    model = whisper.load_model("small")
+    model = whisper.load_model("tiny")
     result = model.transcribe(video_path)
     return {
         "text": result["text"],
@@ -69,9 +72,15 @@ def transcribe_audio(video_path: str, shortcode: str) -> dict:
 
 def video_duration(video_path: str) -> float:
     r = subprocess.run(
-        ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
-         "-of", "csv=p=0", video_path], capture_output=True, text=True)
-    return float(r.stdout.strip())
+        ["ffmpeg", "-i", video_path], capture_output=True, text=True)
+    for line in r.stderr.splitlines():
+        if "Duration:" in line:
+            parts = line.split("Duration:")[1].split(",")[0].strip().split(":")
+            try:
+                return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
+            except Exception:
+                pass
+    return 0.0
 
 def dedupe_lines(ocr_results: list) -> list:
     """Remove consecutive duplicate OCR lines (captions persist across frames)."""

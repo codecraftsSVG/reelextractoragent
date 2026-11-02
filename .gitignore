@@ -1,8 +1,10 @@
 credentials/
-storage/output/*
+storage/
+.venv/
 __pycache__/
 *.pyc
 node_modules/
 .env
 *.mp4
 *.png
+*.exe
