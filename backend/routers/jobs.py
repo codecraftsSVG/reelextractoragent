@@ -1,4 +1,4 @@
-import os, subprocess, re
+import os, subprocess, re, sys
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -37,7 +37,7 @@ def create_job(payload: JobIn, db: Session = Depends(get_db)):
     db.add(job)
     db.commit()
     # Fire-and-forget runner (use Celery in production)
-    subprocess.Popen(["python", "workers/runner.py", str(job.id)],
+    subprocess.Popen([sys.executable, "workers/runner.py", str(job.id)],
                      cwd=os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
     return {"job_id": job.id}
 
