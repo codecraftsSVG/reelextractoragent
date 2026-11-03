@@ -1,8 +1,14 @@
 """Tool implementations: yt-dlp, ffmpeg, tesseract, whisper wrappers."""
-import json, os, random, subprocess, time
+import json, os, random, subprocess, time, shutil
 import imageio_ffmpeg
 
-os.environ["PATH"] += os.pathsep + os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
+_ffmpeg_source = imageio_ffmpeg.get_ffmpeg_exe()
+_ffmpeg_dir = os.path.abspath("storage/downloads")
+os.makedirs(_ffmpeg_dir, exist_ok=True)
+_ffmpeg_target = os.path.join(_ffmpeg_dir, "ffmpeg.exe")
+if not os.path.exists(_ffmpeg_target):
+    shutil.copyfile(_ffmpeg_source, _ffmpeg_target)
+os.environ["PATH"] = _ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
 
 COOKIES = "credentials/cookies.txt"
 TMP = "storage/tmp"

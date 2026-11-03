@@ -4,17 +4,43 @@ const API = "";
 
 function SubmitForm({ onSubmit }) {
   const [user, setUser] = useState("");
+  const [mode, setMode] = useState("username");
+  const [reelUrl, setReelUrl] = useState("");
   return (
-    <div style={{ padding: 20, display: "flex", gap: 8 }}>
-      <input
-        placeholder="@target_username"
-        value={user}
-        onChange={(e) => setUser(e.target.value)}
-        style={{ padding: 8, width: 260 }}
-      />
-      <button onClick={() => onSubmit(user)} style={{ padding: "8px 16px" }}>
-        Extract all reels
-      </button>
+    <div style={{ padding: 20 }}>
+      <div style={{ display: "flex", gap: 12, marginBottom: 10 }}>
+        <label>
+          <input type="radio" checked={mode === "username"} onChange={() => setMode("username")} /> Profile
+        </label>
+        <label>
+          <input type="radio" checked={mode === "link"} onChange={() => setMode("link")} /> Reel link
+        </label>
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        {mode === "username" ? (
+          <input
+            placeholder="@target_username"
+            value={user}
+            onChange={(e) => setUser(e.target.value)}
+            style={{ padding: 8, width: 260 }}
+          />
+        ) : (
+          <input
+            placeholder="https://www.instagram.com/reel/SHORTCODE/"
+            value={reelUrl}
+            onChange={(e) => setReelUrl(e.target.value)}
+            style={{ padding: 8, width: 420 }}
+          />
+        )}
+        <button
+          onClick={() => onSubmit(mode === "username"
+            ? { target_user: user }
+            : { reel_url: reelUrl })}
+          style={{ padding: "8px 16px" }}
+        >
+          {mode === "username" ? "Extract all reels" : "Extract reel"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -39,7 +65,7 @@ function JobList({ jobs, selected, onSelect }) {
             borderRadius: 6,
           }}
         >
-          <b>@{j.target_user}</b> — {j.status} — {j.done_reels}/{j.total_reels} reels
+          <b>{j.target_user}</b> — {j.status} — {j.done_reels}/{j.total_reels} reels
         </div>
       ))}
     </div>
@@ -117,7 +143,7 @@ export default function App() {
     fetch(`${API}/jobs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ target_user: user }),
+      body: JSON.stringify(user),
     }).then((r) => r.json()).then((d) => { setSelected(d.job_id); refresh(); });
   };
 

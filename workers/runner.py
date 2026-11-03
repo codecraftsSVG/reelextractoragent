@@ -4,6 +4,7 @@ runner executes tools and logs every step.
 Usage: python workers/runner.py <job_id>
 """
 import os, sys, json, time
+import asyncio
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.database import SessionLocal, Base, engine
@@ -16,6 +17,77 @@ def run_job(job_id: int):
     db = SessionLocal()
     job = db.get(Job, job_id)
     traj = TrajectoryLogger(job_id=job_id)
+
+    if getattr(job, "reel_url", None):
+        reel_url = job.reel_url.strip()
+        shortcode = reel_url.split("?")[0].rstrip("/").split("/")[-1]
+        job.status = "running"
+        db.commit()
+        traj.reel_id = None
+        r = Reel(job_id=job_id, shortcode=shortcode, reel_url=reel_url)
+        db.add(r)
+        db.commit()
+        traj.reel_id = r.id
+
+        try:
+            from extract_reel import download_via_igexport
+            with traj.step("DownloadAgent", "igexport_download") as s:
+                s.input = reel_url
+                video_path = asyncio.run(download_via_igexport(reel_url, shortcode))
+                s.output = video_path
+
+            f = {
+                "shortcode": shortcode,
+                "url": reel_url,
+                "caption": "Instagram Reel",
+                "uploader": "unknown",
+                "upload_date": "",
+                "like_count": 0,
+                "video_path": video_path,
+            }
+            with traj.step("TranscriptAgent", "transcribe") as s:
+                s.input = video_path
+                t = transcript.transcribe(video_path, shortcode)
+                s.output = f"chars={len(t['text'])}"
+            with traj.step("OCRAgent", "ocr") as s:
+                s.input = video_path
+                o = ocr.extract_text(video_path, shortcode)
+                s.output = f"frames={o['frames_extracted']} lines={len(o['lines'])}"
+
+            out_dir = os.path.join("storage", "output", f"@reel-{shortcode}")
+            md_path = writer.write_md(out_dir, f, t, o)
+            with traj.step("VerifierAgent", "verify") as s:
+                s.input = md_path
+                v = verifier.verify_reel(f, t, o, md_path, f["caption"])
+                s.output = json.dumps(v["detail"])[:2000]
+                if v["status"] == "retry":
+                    o2 = ocr.extract_text(video_path, shortcode, fps=1.0)
+                    md_path = writer.write_md(out_dir, f, t, o2)
+                    v = verifier.verify_reel(f, t, o2, md_path, f["caption"])
+                    o = o2
+            with traj.step("EvaluatorAgent", "evaluate") as s:
+                s.input = md_path
+                ev = evaluator.score(f, t, o, v)
+                s.output = f"total={ev['total']} verdict={ev['verdict']}"
+
+            r.md_path = md_path
+            r.verify_status = v["status"]
+            r.score = ev["total"]
+            for crit, sc in ev["criteria"].items():
+                db.add(Evaluation(reel_id=r.id, criterion=crit, score=sc,
+                                  justification=ev["justification"][:500]))
+            job.done_reels = 1
+            job.status = "done"
+            db.commit()
+            print(f"Job {job_id} complete -> {md_path}")
+            return
+        except Exception as e:
+            job.status = "error"
+            db.commit()
+            with traj.step("DownloadAgent", "reel_job") as s:
+                s.input = reel_url
+                s.output = str(e)
+            raise
 
     # 1. Scout
     with traj.step("ProfileScoutAgent", "scout") as s:

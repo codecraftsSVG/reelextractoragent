@@ -1,4 +1,4 @@
-import os, subprocess
+import os, subprocess, re
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -15,11 +15,25 @@ def get_db():
         db.close()
 
 class JobIn(BaseModel):
-    target_user: str
+    target_user: str | None = None
+    reel_url: str | None = None
 
 @router.post("")
 def create_job(payload: JobIn, db: Session = Depends(get_db)):
-    job = Job(target_user=payload.target_user.lstrip("@"), status="queued")
+    if payload.reel_url:
+        reel_url = payload.reel_url.strip()
+        if not re.match(r"https://(?:www\.)?instagram\.com/(?:reel|reels)/[A-Za-z0-9_-]+/?(?:\?.*)?$", reel_url):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=422, detail="Enter a valid Instagram reel URL")
+        shortcode = reel_url.split("?")[0].rstrip("/").split("/")[-1]
+        job = Job(target_user=f"Reel: {shortcode}", reel_url=reel_url, status="queued",
+                  total_reels=1)
+    else:
+        target_user = (payload.target_user or "").strip().lstrip("@")
+        if not target_user:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=422, detail="Enter an Instagram username or reel URL")
+        job = Job(target_user=f"@{target_user}", reel_url=None, status="queued")
     db.add(job)
     db.commit()
     # Fire-and-forget runner (use Celery in production)

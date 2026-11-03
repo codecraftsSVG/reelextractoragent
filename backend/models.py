@@ -6,6 +6,7 @@ class Job(Base):
     __tablename__ = "jobs"
     id = Column(Integer, primary_key=True)
     target_user = Column(String, nullable=False)
+    reel_url = Column(String, nullable=True)
     status = Column(String, default="queued")  # queued/running/done/error
     total_reels = Column(Integer, default=0)
     done_reels = Column(Integer, default=0)
