@@ -5,9 +5,14 @@ import imageio_ffmpeg
 _ffmpeg_source = imageio_ffmpeg.get_ffmpeg_exe()
 _ffmpeg_dir = os.path.abspath("storage/downloads")
 os.makedirs(_ffmpeg_dir, exist_ok=True)
-_ffmpeg_target = os.path.join(_ffmpeg_dir, "ffmpeg.exe")
-if not os.path.exists(_ffmpeg_target):
-    shutil.copyfile(_ffmpeg_source, _ffmpeg_target)
+for name in ["ffmpeg", "ffmpeg.exe"]:
+    _target = os.path.join(_ffmpeg_dir, name)
+    if not os.path.exists(_target):
+        shutil.copyfile(_ffmpeg_source, _target)
+        try:
+            os.chmod(_target, 0o755)
+        except Exception:
+            pass
 os.environ["PATH"] = _ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
 
 COOKIES = "credentials/cookies.txt"
