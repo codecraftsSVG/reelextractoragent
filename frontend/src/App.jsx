@@ -74,7 +74,7 @@ function JobList({ jobs, selected, onSelect }) {
   );
 }
 
-function ReelGrid({ jobId }) {
+function ReelGrid({ jobId, selectedReel, onSelectReel }) {
   const [detail, setDetail] = useState(null);
   useEffect(() => {
     if (!jobId) return;
@@ -91,16 +91,52 @@ function ReelGrid({ jobId }) {
       <h3>Reels</h3>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10 }}>
         {detail.reels.map((r) => (
-          <div key={r.id} style={{ border: "1px solid #ddd", borderRadius: 6, padding: 10 }}>
+          <div
+            key={r.id}
+            onClick={() => onSelectReel(r)}
+            style={{
+              border: selectedReel?.id === r.id ? "2px solid #0969da" : "1px solid #ddd",
+              borderRadius: 6, padding: 10, cursor: "pointer", background: selectedReel?.id === r.id ? "#f0f6fc" : "#fff"
+            }}
+          >
             <div style={{ fontFamily: "monospace", fontSize: 12 }}>{r.shortcode}</div>
             <div>verify: {r.verify_status}</div>
             <div style={{ color: scoreColor(r.score), fontWeight: 700 }}>
               {r.score != null ? `score: ${r.score}` : "—"}
             </div>
-            {r.md_path && <a href={`/${r.md_path}`} target="_blank" rel="noreferrer">open .md</a>}
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ReelSidebar({ reel }) {
+  const [content, setContent] = useState("");
+  useEffect(() => {
+    if (!reel || !reel.md_path) {
+      setContent("Select a reel to view extracted report and transcript.");
+      return;
+    }
+    fetch(`/${reel.md_path}`)
+      .then((r) => r.text())
+      .then(setContent)
+      .catch(() => setContent("Failed to load report."));
+  }, [reel]);
+
+  return (
+    <div style={{ padding: 20, borderLeft: "1px solid #ddd", width: 420, background: "#f6f8fa", minHeight: 400, overflowY: "auto" }}>
+      <h3>Extracted Text Report</h3>
+      {reel && (
+        <div style={{ fontSize: 13, marginBottom: 10 }}>
+          <div><b>Shortcode:</b> {reel.shortcode}</div>
+          <div><b>Status:</b> {reel.verify_status} | <b>Score:</b> {reel.score != null ? reel.score : "—"}</div>
+          {reel.reel_url && <div><a href={reel.reel_url} target="_blank" rel="noreferrer">Open on Instagram</a></div>}
+        </div>
+      )}
+      <pre style={{ whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: 11, background: "#fff", padding: 12, borderRadius: 6, border: "1px solid #d0d7de", maxHeight: 500, overflowY: "auto" }}>
+        {content}
+      </pre>
     </div>
   );
 }
@@ -130,6 +166,7 @@ function Trajectory({ jobId }) {
 export default function App() {
   const [jobs, setJobs] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [selectedReel, setSelectedReel] = useState(null);
 
   const refresh = useCallback(() => {
     fetch(`${API}/jobs`).then((r) => r.json()).then(setJobs);
@@ -146,17 +183,25 @@ export default function App() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(user),
-    }).then((r) => r.json()).then((d) => { setSelected(d.job_id); refresh(); });
+    }).then((r) => r.json()).then((d) => { setSelected(d.job_id); setSelectedReel(null); refresh(); });
   };
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", fontFamily: "system-ui" }}>
+    <div style={{ maxWidth: 1250, margin: "0 auto", fontFamily: "system-ui" }}>
       <h1 style={{ padding: "20px 20px 0" }}>Reel Extractor</h1>
       <SubmitForm onSubmit={submit} />
       <div style={{ display: "flex" }}>
-        <div style={{ width: 320 }}><JobList jobs={jobs} selected={selected} onSelect={setSelected} /></div>
+        <div style={{ width: 300 }}><JobList jobs={jobs} selected={selected} onSelect={(id) => { setSelected(id); setSelectedReel(null); }} /></div>
         <div style={{ flex: 1 }}>
-          {selected && <><ReelGrid jobId={selected} /><Trajectory jobId={selected} /></>}
+          {selected && (
+            <div style={{ display: "flex" }}>
+              <div style={{ flex: 1 }}>
+                <ReelGrid jobId={selected} selectedReel={selectedReel} onSelectReel={setSelectedReel} />
+                <Trajectory jobId={selected} />
+              </div>
+              <ReelSidebar reel={selectedReel} />
+            </div>
+          )}
         </div>
       </div>
     </div>
