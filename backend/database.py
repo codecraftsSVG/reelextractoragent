@@ -2,7 +2,8 @@ import os
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./reel.db")
+os.makedirs("storage", exist_ok=True)
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./storage/reel.db")
 if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 else:
@@ -18,3 +19,4 @@ def ensure_job_reel_url_column():
         if "reel_url" not in columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE jobs ADD COLUMN reel_url VARCHAR"))
+

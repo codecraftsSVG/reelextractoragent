@@ -39,5 +39,6 @@ This repository is fully configured for deployment on [Render](https://render.co
 
 
 ## Storage and Persistence
-- By default, SQLite is used (`sqlite:///./reel.db`) and downloads/storage are stored in `./storage`.
-- Note: On Render's free tier, local filesystem storage is ephemeral (cleared on redeploys). For persistent storage of downloaded reels and markdown files across redeploys, you can attach a Render Persistent Disk mounted at `/app/storage`.
+- The SQLite database is stored at `storage/reel.db`, and downloaded videos/reports are saved in `storage/`.
+- `render.yaml` automatically provisions a **Render Persistent Disk** mounted at `/app/storage` (1 GB), ensuring that your database and extraction reports **never get wiped out** during container restarts or redeploys.
+

@@ -10,4 +10,9 @@ services:
         value: "1"
       - key: GEMINI_API_KEY
         sync: false
+    disk:
+      name: reel-storage
+      mountPath: /app/storage
+      sizeGB: 1
+
 
