@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 
-const API = "";
+const API = window.location.hostname === "localhost" && window.location.port === "5173"
+  ? ""
+  : `http://${window.location.hostname}:8000`;
 
 function SubmitForm({ onSubmit }) {
   const [user, setUser] = useState("");
