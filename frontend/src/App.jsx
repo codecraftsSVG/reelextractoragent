@@ -118,7 +118,7 @@ function ReelSidebar({ reel }) {
       setContent("Select a reel to view extracted report and transcript.");
       return;
     }
-    fetch(`/${reel.md_path}`)
+    fetch(`${API}/${reel.md_path}`)
       .then((r) => r.text())
       .then(setContent)
       .catch(() => setContent("Failed to load report."));
