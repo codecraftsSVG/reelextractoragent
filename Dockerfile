@@ -15,15 +15,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN playwright install chromium
 
-COPY frontend/package*.json ./frontend/
-RUN cd frontend && npm install
-
 COPY . .
 
-RUN cd frontend && npm run build
+RUN cd frontend && npm install && npm run build
 
 EXPOSE 8000
 
 CMD ["python3", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
 
 
