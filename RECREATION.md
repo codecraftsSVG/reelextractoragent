@@ -102,16 +102,34 @@ This workflow:
 
 ## 6. Running the Application Stack
 
-### Start Backend API
+### Option A: Running Locally (Development)
+#### Start Backend API
 ```bash
-uvicorn app:app --reload --port 8000
+uvicorn backend.main:app --reload --port 8000
 ```
 
-### Start Frontend Dev Server
+#### Start Frontend Dev Server
 ```bash
 cd frontend
 npm run dev
 ```
+
+### Option B: Running via Docker Compose
+```bash
+docker-compose up --build
+```
+
+### Option C: Production Deployment (Oracle Cloud / Linux Systemd)
+1. Install Python 3.11, pip, Node.js, and npm.
+2. Clone repository and install dependencies:
+   ```bash
+   pip3 install -r requirements.txt
+   ```
+3. Build frontend assets:
+   ```bash
+   cd frontend && npm install && npm run build
+   ```
+4. Configure systemd services (`/etc/systemd/system/reel-backend.service` and `/etc/systemd/system/reel-frontend.service`) to run persistently on ports `8000` and `5173`.
 
 ---
 

@@ -1,15 +1,18 @@
 version: "3.9"
 services:
-  postgres:
-    image: postgres:16
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
     environment:
-      POSTGRES_USER: reel
-      POSTGRES_PASSWORD: reel
-      POSTGRES_DB: reel
-    ports: ["5432:5432"]
-    volumes: ["pgdata:/var/lib/postgresql/data"]
-  redis:
-    image: redis:7
-    ports: ["6379:6379"]
-volumes:
-  pgdata:
+      - DATABASE_URL=sqlite:///./reel.db
+    volumes:
+      - ./storage:/app/storage
+  frontend:
+    image: node:18-alpine
+    working_dir: /app/frontend
+    volumes:
+      - ./frontend:/app/frontend
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
