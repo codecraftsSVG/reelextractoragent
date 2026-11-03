@@ -48,8 +48,12 @@ def list_jobs(db: Session = Depends(get_db)):
 @router.get("/{job_id}")
 def job_detail(job_id: int, db: Session = Depends(get_db)):
     job = db.get(Job, job_id)
+    if not job:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Job not found")
     reels = db.query(Reel).filter(Reel.job_id == job_id).all()
     return {"job": job, "reels": reels}
+
 
 @router.get("/{job_id}/evaluation")
 def job_evaluations(job_id: int, db: Session = Depends(get_db)):
