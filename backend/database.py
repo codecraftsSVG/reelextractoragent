@@ -10,6 +10,8 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./storage/reel.db")
 if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 else:
+    if DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+psycopg2://"):
+        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
     engine = create_engine(DATABASE_URL)
 
 SessionLocal = sessionmaker(bind=engine)
@@ -22,5 +24,6 @@ def ensure_job_reel_url_column():
         if "reel_url" not in columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE jobs ADD COLUMN reel_url VARCHAR"))
+
 
 
