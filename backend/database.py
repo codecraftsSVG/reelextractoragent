@@ -24,6 +24,14 @@ def ensure_job_reel_url_column():
         if "reel_url" not in columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE jobs ADD COLUMN reel_url VARCHAR"))
+    
+    if "trajectory_events" in insp.get_table_names():
+        columns = {column["name"] for column in insp.get_columns("trajectory_events")}
+        with engine.begin() as connection:
+            if "error_message" not in columns:
+                connection.execute(text("ALTER TABLE trajectory_events ADD COLUMN error_message TEXT"))
+            if "opik_trace_id" not in columns:
+                connection.execute(text("ALTER TABLE trajectory_events ADD COLUMN opik_trace_id VARCHAR"))
 
 
 

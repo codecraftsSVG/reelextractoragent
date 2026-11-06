@@ -5,12 +5,18 @@ from fastapi.responses import FileResponse
 import os
 from .database import Base, engine, ensure_job_reel_url_column
 from .routers import jobs, trajectory
+from trajectory.app_logger import setup_logging, get_logger
+from trajectory.error_middleware import GlobalErrorMiddleware
+
+setup_logging()
+logger = get_logger("API")
 
 Base.metadata.create_all(engine)
 ensure_job_reel_url_column()
 os.makedirs("storage", exist_ok=True)
 
 app = FastAPI(title="Reel Extractor API")
+app.add_middleware(GlobalErrorMiddleware)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.mount("/storage", StaticFiles(directory="storage"), name="storage")
 app.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
@@ -18,6 +24,7 @@ app.include_router(trajectory.router, prefix="/trajectory", tags=["trajectory"])
 
 @app.get("/health")
 def health():
+    logger.info("Health check invoked")
     return {"status": "ok"}
 
 frontend_dist = os.path.join("frontend", "dist")
@@ -36,5 +43,3 @@ if os.path.exists(frontend_dist):
         if os.path.exists(file_path) and os.path.isfile(file_path):
             return FileResponse(file_path)
         return FileResponse(os.path.join(frontend_dist, "index.html"))
-
-

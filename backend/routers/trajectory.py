@@ -18,5 +18,7 @@ def get_trajectory(job_id: int, db: Session = Depends(get_db)):
                 .filter(TrajectoryEvent.job_id == job_id)
                 .order_by(TrajectoryEvent.id).all())
     return [{"agent": e.agent, "step": e.step, "status": e.status,
-             "latency_ms": e.latency_ms, "output": e.output[:500],
+             "latency_ms": e.latency_ms, "output": (e.output or "")[:500],
+             "error_message": e.error_message,
+             "opik_trace_id": e.opik_trace_id,
              "at": str(e.created_at)} for e in events]

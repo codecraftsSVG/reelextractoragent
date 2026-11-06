@@ -34,6 +34,8 @@ class TrajectoryEvent(Base):
     output = Column(Text)
     latency_ms = Column(Integer)
     status = Column(String, default="ok")
+    error_message = Column(Text, nullable=True)
+    opik_trace_id = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
 class Evaluation(Base):
