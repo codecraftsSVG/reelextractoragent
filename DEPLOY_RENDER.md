@@ -38,7 +38,7 @@ This repository is fully configured for deployment on [Render](https://render.co
 - `GEMINI_API_KEY`: Required for the Google ADK AI agents (`ProfileScoutAgent`, `FetchAgent`, `TranscriptAgent`, `OCRAgent`, `VerifierAgent`, `EvaluatorAgent`, etc.). Get your API key from Google AI Studio and add it in your Render Service -> Environment settings.
 
 
-## Storage and Persistence
-- The SQLite database is stored at `storage/reel.db`, and downloaded videos/reports are saved in `storage/`.
-- `render.yaml` automatically provisions a **Render Persistent Disk** mounted at `/app/storage` (1 GB), ensuring that your database and extraction reports **never get wiped out** during container restarts or redeploys.
+## Database (PostgreSQL)
+- The codebase includes `psycopg2-binary` and dynamic database support in `backend/database.py`.
+- `render.yaml` is now configured to automatically provision a **Render Managed PostgreSQL Database** (`reeldb`) and link its connection string via `DATABASE_URL` to your web service.
 
