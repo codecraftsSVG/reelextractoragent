@@ -12,7 +12,7 @@ if DATABASE_URL.startswith("sqlite"):
 else:
     if DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+psycopg2://"):
         DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
-    engine = create_engine(DATABASE_URL)
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
 
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
@@ -24,6 +24,7 @@ def ensure_job_reel_url_column():
         if "reel_url" not in columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE jobs ADD COLUMN reel_url VARCHAR"))
+
     
     if "trajectory_events" in insp.get_table_names():
         columns = {column["name"] for column in insp.get_columns("trajectory_events")}

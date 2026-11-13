@@ -16,17 +16,43 @@ async def download_via_igexport(reel_url: str, shortcode: str) -> str:
     if os.path.exists(video_path):
         return video_path
 
+    # Primary: try yt-dlp with cookies (per CLAUDE.md rules)
+    try:
+        import subprocess
+        print(f"[{shortcode}] Attempting download via yt-dlp...")
+        cmd = [
+            "yt-dlp",
+            "--no-warnings",
+            "--sleep-requests", "5",
+            "--sleep-interval", "10",
+            "--retries", "3",
+            "-o", video_path,
+            reel_url
+        ]
+        cookies_path = os.path.abspath("credentials/cookies.txt")
+        if os.path.exists(cookies_path):
+            cmd.extend(["--cookies", cookies_path])
+
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+        if res.returncode == 0 and os.path.exists(video_path) and os.path.getsize(video_path) > 50000:
+            print(f"[{shortcode}] yt-dlp download successful!")
+            return video_path
+        else:
+            print(f"[{shortcode}] yt-dlp failed or output too small: {res.stderr}")
+    except Exception as e:
+        print(f"[{shortcode}] yt-dlp exception: {e}")
+
+    # Fallback: Playwright igexport.com
+    print(f"[{shortcode}] Falling back to igexport.com via Playwright...")
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         try:
             await page.goto("https://igexport.com/en/reels-download/", timeout=60000)
-            # Fill reel URL
             input_box = await page.wait_for_selector('input[type="search"], input[type="text"], input[type="url"], input', timeout=15000)
             await input_box.fill(reel_url)
             await page.keyboard.press("Enter")
             
-            # Wait for video element or download button
             video_elem = await page.wait_for_selector('video', timeout=30000)
             video_src = await video_elem.get_attribute('src')
             if not video_src:
@@ -37,6 +63,7 @@ async def download_via_igexport(reel_url: str, shortcode: str) -> str:
         finally:
             await browser.close()
     return video_path
+
 
 def process_reel(reel_url: str, caption: str = "Instagram Reel", uploader: str = "unknown") -> dict:
     # Extract shortcode from URL
