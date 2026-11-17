@@ -3,6 +3,12 @@ import pytest
 import subprocess
 
 
+@pytest.fixture(autouse=True)
+def stub_cookie_path(monkeypatch):
+    import agents.tools as tools
+    monkeypatch.setattr(tools, "_cookie_path", lambda: tools.COOKIES)
+
+
 def _rubric(monkeypatch, tmp_path):
     """Write a minimal rubric.yaml and point evaluator at it."""
     import yaml
