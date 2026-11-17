@@ -4,6 +4,7 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def ensure_tables():
+    import backend.models  # Register tables before create_all().
     from backend.database import Base, engine
     Base.metadata.create_all(engine)
     yield
@@ -29,6 +30,13 @@ def _fake_asyncio_run(coro):
 
 
 def _patch_pipeline(monkeypatch, runner):
+    # Mock the metadata fetch too, so the single-reel branch never hits real
+    # yt-dlp (the runner imports agents.tools.ytdlp_json lazily).
+    import agents.tools as _tools
+    monkeypatch.setattr(_tools, "ytdlp_json",
+                        lambda url: {"description": "Test caption #hashtag",
+                                     "uploader": "creator", "upload_date": "20240101",
+                                     "like_count": 42})
     monkeypatch.setattr(runner.asyncio, "run", _fake_asyncio_run)
     monkeypatch.setattr(runner.transcript, "transcribe",
                         lambda p, s: {"text": "hello", "avg_confidence": 0.8})
@@ -77,7 +85,7 @@ def test_run_job_reel_url_happy(monkeypatch):
     assert len(evs) == 1
     steps = [e.step for e in db.query(TrajectoryEvent)
              .filter_by(job_id=jid).order_by(TrajectoryEvent.id).all()]
-    assert steps == ["igexport_download", "transcribe", "ocr", "verify", "evaluate"]
+    assert steps == ["igexport_download", "metadata", "transcribe", "ocr", "verify", "evaluate"]
     db.close()
 
 

@@ -4,7 +4,7 @@ runner executes tools and logs every step.
 Usage: python workers/runner.py <job_id>
 """
 import os, sys, json, time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import asyncio
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -23,7 +23,9 @@ def recover_stale_jobs(db, current_job_id: int) -> list:
     A runner is spawned per job and sets its own job 'running' only after this
     sweep, so any other 'running' job older than the grace window belongs to a
     runner that died (deploy recycle, spin-down, crash)."""
-    cutoff = datetime.utcnow() - timedelta(minutes=10)
+    # created_at is a naive column; use naive UTC to avoid the utcnow deprecation
+    # while keeping comparisons type-consistent.
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=10)
     stale = (db.query(Job)
              .filter(Job.status == "running",
                      Job.id != current_job_id,
@@ -81,18 +83,19 @@ def run_job(job_id: int):
                 "like_count": 0,
                 "video_path": video_path,
             }
-            try:
-                from agents.tools import ytdlp_json
-                meta = ytdlp_json(reel_url)
-                f["caption"] = meta.get("description") or meta.get("title") or "[unreadable]"
-                f["uploader"] = meta.get("uploader") or meta.get("channel") or "[unreadable]"
-                f["upload_date"] = meta.get("upload_date") or "[unreadable]"
-                f["like_count"] = meta.get("like_count") or 0
-            except Exception as e:
-                with traj.step("FetchAgent", "metadata") as s:
-                    s.input = reel_url
+            with traj.step("FetchAgent", "metadata") as s:
+                s.input = reel_url
+                try:
+                    from agents.tools import ytdlp_json
+                    meta = ytdlp_json(reel_url)
+                    f["caption"] = meta.get("description") or meta.get("title") or "[unreadable]"
+                    f["uploader"] = meta.get("uploader") or meta.get("channel") or "[unreadable]"
+                    f["upload_date"] = meta.get("upload_date") or "[unreadable]"
+                    f["like_count"] = meta.get("like_count") or 0
+                    s.output = "metadata retrieved"
+                except Exception as e:
                     s.output = f"metadata unavailable: {e}"
-                print(f"metadata unavailable, using [unreadable]: {e}")
+                    print(f"metadata unavailable, using [unreadable]: {e}")
             with traj.step("TranscriptAgent", "transcribe") as s:
                 s.input = video_path
                 t = transcript.transcribe(video_path, shortcode)
