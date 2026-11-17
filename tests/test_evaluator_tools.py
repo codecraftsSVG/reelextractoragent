@@ -1,5 +1,6 @@
 import os
 import pytest
+import subprocess
 
 
 def _rubric(monkeypatch, tmp_path):
@@ -66,6 +67,7 @@ def test_score_caption_mismatch_caps_hallucination(monkeypatch, tmp_path):
 def test_score_mid_transcript_confidence(monkeypatch, tmp_path):
     ev = _rubric(monkeypatch, tmp_path)
     fetch = {"caption": "cap", "shortcode": "a", "url": "u"}
+    # evaluator bands: <0.2 -> 25, <0.4 -> 15, else 5 (lower no_speech_prob = better)
     res = ev.score(fetch, {"text": "x", "avg_confidence": 0.3},
                    {"lines": [], "duration_s": 0}, {"status": "pass", "failed_checks": []})
     assert res["criteria"]["transcript_accuracy"] == 15
@@ -289,7 +291,6 @@ def test_ytdlp_command_includes_required_flags(monkeypatch):
 
 
 def test_download_command_includes_sleep_flags(monkeypatch, tmp_path):
-    import subprocess
     import agents.tools as tools
     monkeypatch.setattr(tools, "_jitter", lambda: None)
     monkeypatch.setattr(tools, "TMP", str(tmp_path))

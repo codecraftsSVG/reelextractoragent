@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
-from .database import Base, engine, ensure_job_reel_url_column
+from .database import Base, engine, ensure_job_reel_url_column, ensure_trajectory_columns
 from .routers import jobs, trajectory
 from trajectory.app_logger import setup_logging, get_logger
 from trajectory.error_middleware import GlobalErrorMiddleware
@@ -13,7 +13,9 @@ logger = get_logger("API")
 
 Base.metadata.create_all(engine)
 ensure_job_reel_url_column()
+ensure_trajectory_columns()
 os.makedirs("storage", exist_ok=True)
+
 
 app = FastAPI(title="Reel Extractor API")
 app.add_middleware(GlobalErrorMiddleware)

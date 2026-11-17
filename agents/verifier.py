@@ -3,6 +3,12 @@ import os
 
 MIN_VIDEO_BYTES = 50 * 1024
 
+def _norm_caption(caption) -> str:
+    """Collapse all whitespace (incl. embedded newlines) to single spaces.
+    Instagram captions contain newlines; writer.write_md renders one line, so
+    both sides must normalize identically or V3 loops forever."""
+    return " ".join(str(caption or "").split())
+
 def verify_reel(fetch: dict, transcript: dict, ocr: dict, md_path: str, md_caption: str,
                 expected_total: int = None, extracted_total: int = None) -> dict:
     checks = []
@@ -17,12 +23,18 @@ def verify_reel(fetch: dict, transcript: dict, ocr: dict, md_path: str, md_capti
     v2 = dur == 0 or len(ocr.get("raw") or []) >= dur * 0.4
     checks.append(("V2_frame_coverage", v2, f"frames {len(ocr.get('raw') or [])} < 0.4x duration {dur}"))
 
-    # V3 caption match (exact)
-    v3 = (md_caption or "").strip() == (fetch.get("caption") or "").strip()
+    # V3 caption match (exact, on whitespace-normalized strings)
+    v3 = _norm_caption(md_caption) == _norm_caption(fetch.get("caption"))
     checks.append(("V3_caption_match", v3, "MD caption differs from yt-dlp caption"))
 
-    # V4 transcript sanity
-    v4 = (transcript.get("avg_confidence") or 0) >= 0.35  # no_speech_prob proxy; lower = speech
+    # V4 transcript sanity. avg_confidence is a mean no_speech_prob
+    # (agents/tools.py:transcribe_audio) — LOWER is better. Missing/unset is
+    # unreadable, not clean, so it fails.
+    try:
+        conf = float(transcript.get("avg_confidence"))
+    except (TypeError, ValueError):
+        conf = None
+    v4 = conf is not None and conf < 0.35
     checks.append(("V4_transcript_confidence", v4, "avg no_speech_prob above threshold"))
 
     # V5 no runaway duplication

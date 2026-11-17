@@ -19,6 +19,30 @@ COOKIES = "credentials/cookies.txt"
 TMP = "storage/tmp"
 os.makedirs(TMP, exist_ok=True)
 
+def ensure_cookies() -> str:
+    """Materialize credentials/cookies.txt from the COOKIES_TXT env var when the
+    file is absent (deployed containers have no repo checkout of credentials/).
+    Returns the path; raises if neither source is available."""
+    if os.path.exists(COOKIES):
+        return COOKIES
+    blob = os.environ.get("COOKIES_TXT")
+    if not blob:
+        raise RuntimeError(
+            "Missing Instagram cookies: no credentials/cookies.txt and COOKIES_TXT unset")
+    os.makedirs(os.path.dirname(COOKIES), exist_ok=True)
+    with open(COOKIES, "w") as f:
+        f.write(blob if blob.endswith("\n") else blob + "\n")
+    try:
+        os.chmod(COOKIES, 0o600)
+    except Exception:
+        pass
+    return COOKIES
+
+def _cookie_path() -> str:
+    """Cookie path for argv. Prefers the literal path so the yt-dlp command line
+    stays inspectable (and testable); falls back to materializing on demand."""
+    return COOKIES if os.path.exists(COOKIES) else ensure_cookies()
+
 def _jitter():
     time.sleep(random.uniform(8, 15))
 
@@ -26,7 +50,8 @@ def ytdlp_json(url: str) -> dict:
     """Full metadata for a reel via yt-dlp."""
     _jitter()
     r = subprocess.run(
-        ["yt-dlp", "--cookies", COOKIES, "--dump-json", "--retries", "3", url],
+        ["yt-dlp", "--cookies", _cookie_path(), "--dump-json",
+         "--sleep-requests", "5", "--sleep-interval", "10", "--retries", "3", url],
         capture_output=True, text=True, timeout=300)
     if r.returncode != 0:
         raise RuntimeError(f"yt-dlp metadata failed: {r.stderr[-500:]}")
@@ -37,8 +62,8 @@ def download_video(url: str, shortcode: str) -> str:
     _jitter()
     out = os.path.join(TMP, f"{shortcode}.%(ext)s")
     r = subprocess.run(
-        ["yt-dlp", "--cookies", COOKIES, "-o", out,
-         "--sleep-requests", "5", "--sleep-interval", "10", url],
+        ["yt-dlp", "--cookies", _cookie_path(), "-o", out,
+         "--sleep-requests", "5", "--sleep-interval", "10", "--retries", "3", url],
         capture_output=True, text=True, timeout=600)
     if r.returncode != 0:
         raise RuntimeError(f"yt-dlp download failed: {r.stderr[-500:]}")

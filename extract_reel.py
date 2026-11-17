@@ -7,6 +7,7 @@ from playwright.async_api import async_playwright
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from agents import transcript, ocr, writer, verifier, evaluator
+from agents.tools import _cookie_path
 
 DOWNLOADS_DIR = os.path.abspath("storage/downloads")
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
@@ -23,17 +24,15 @@ async def download_via_igexport(reel_url: str, shortcode: str) -> str:
         cmd = [
             "yt-dlp",
             "--no-warnings",
+            "--cookies", _cookie_path(),
             "--sleep-requests", "5",
             "--sleep-interval", "10",
             "--retries", "3",
             "-o", video_path,
             reel_url
         ]
-        cookies_path = os.path.abspath("credentials/cookies.txt")
-        if os.path.exists(cookies_path):
-            cmd.extend(["--cookies", cookies_path])
 
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         if res.returncode == 0 and os.path.exists(video_path) and os.path.getsize(video_path) > 50000:
             print(f"[{shortcode}] yt-dlp download successful!")
             return video_path
@@ -52,7 +51,7 @@ async def download_via_igexport(reel_url: str, shortcode: str) -> str:
             input_box = await page.wait_for_selector('input[type="search"], input[type="text"], input[type="url"], input', timeout=15000)
             await input_box.fill(reel_url)
             await page.keyboard.press("Enter")
-            
+
             video_elem = await page.wait_for_selector('video', timeout=30000)
             video_src = await video_elem.get_attribute('src')
             if not video_src:
@@ -65,7 +64,24 @@ async def download_via_igexport(reel_url: str, shortcode: str) -> str:
     return video_path
 
 
-def process_reel(reel_url: str, caption: str = "Instagram Reel", uploader: str = "unknown") -> dict:
+def _fetch_metadata(reel_url: str) -> dict:
+    """Reel metadata via yt-dlp --dump-json. Never fabricates: on any failure
+    returns {} so callers fall back to [unreadable] placeholders (rule 4)."""
+    try:
+        import json as _json
+        import subprocess
+        cmd = ["yt-dlp", "--no-warnings", "--cookies", _cookie_path(),
+               "--dump-json", "--sleep-requests", "5", "--sleep-interval", "10",
+               "--retries", "3", reel_url]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        if res.returncode == 0 and res.stdout.strip():
+            return _json.loads(res.stdout.splitlines()[0])
+    except Exception as e:
+        print(f"[metadata] yt-dlp --dump-json failed: {e}")
+    return {}
+
+
+def process_reel(reel_url: str, caption: str | None = None, uploader: str | None = None) -> dict:
     # Extract shortcode from URL
     clean_url = reel_url.split("?")[0].rstrip("/")
     shortcode = clean_url.split("/")[-1]
@@ -82,13 +98,21 @@ def process_reel(reel_url: str, caption: str = "Instagram Reel", uploader: str =
     print(f"[{shortcode}] Step 1: Downloading video...")
     video_path = asyncio.run(download_via_igexport(reel_url, shortcode))
 
+    # 2. Real metadata when reachable; [unreadable] placeholders otherwise (rule 4).
+    #    Explicit caption/uploader arguments are honoured (CLI/dev use).
+    meta = _fetch_metadata(reel_url)
+    caption = caption or meta.get("description") or meta.get("title") or "[unreadable]"
+    uploader = uploader or meta.get("uploader") or meta.get("channel") or "[unreadable]"
+    upload_date = meta.get("upload_date") or "[unreadable]"
+    like_count = meta.get("like_count") or 0
+
     fetch_data = {
         'shortcode': shortcode,
         'url': reel_url,
         'caption': caption,
         'uploader': uploader,
-        'upload_date': '20261102',
-        'like_count': 0,
+        'upload_date': upload_date,
+        'like_count': like_count,
         'video_path': video_path
     }
 

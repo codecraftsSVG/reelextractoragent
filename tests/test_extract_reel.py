@@ -32,6 +32,8 @@ def test_process_reel_end_to_end_mocked(monkeypatch):
                                          "verdict": "publish"})
     monkeypatch.setattr(extract_reel.asyncio, "run",
                         lambda coro: (coro.close() or "/tmp/vid.mp4"))
+    monkeypatch.setattr(extract_reel, "_fetch_metadata",
+                        lambda url: {"description": "real caption", "upload_date": "20261102"})
 
     out = extract_reel.process_reel(
         "https://www.instagram.com/reel/abc123/?utm=x",
@@ -60,7 +62,7 @@ def test_download_via_igexport_uses_cache(monkeypatch, tmp_path):
 @pytest.mark.live
 def test_live_render_health():
     requests = pytest.importorskip("requests")
-    url = os.getenv("LIVE_BASE_URL", "https://reelextractoragent.onrender.com")
+    url = os.getenv("LIVE_BASE_URL", "https://reelextractoragent-wr3s.onrender.com")
     r = requests.get(f"{url}/health", timeout=60)
     assert r.status_code == 200
     assert r.json().get("status") == "ok"

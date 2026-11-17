@@ -2,7 +2,6 @@ fastapi
 uvicorn[standard]
 sqlalchemy
 psycopg2-binary
-psycopg
 pydantic
 python-multipart
 websockets

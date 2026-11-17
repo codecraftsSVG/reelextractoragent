@@ -27,7 +27,10 @@ score: {score}
 def write_md(output_dir: str, fetch: dict, transcript: dict, ocr: dict,
              verify_status: str = "pending", score=None) -> str:
     os.makedirs(output_dir, exist_ok=True)
-    caption = fetch.get("caption") or ""
+    # Normalize caption to a single line: verifier V3 compares the rendered
+    # `## Caption` section against fetch["caption"] exactly, and a caption with
+    # embedded newlines would wrap and never match (permanent retry loop).
+    caption = " ".join((fetch.get("caption") or "").split())
     hashtags = " ".join(t for t in caption.split() if t.startswith("#"))
     md = MD_TEMPLATE.format(
         url=fetch.get("url"), shortcode=fetch.get("shortcode"),

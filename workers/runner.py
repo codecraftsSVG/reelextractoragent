@@ -4,6 +4,7 @@ runner executes tools and logs every step.
 Usage: python workers/runner.py <job_id>
 """
 import os, sys, json, time
+from datetime import datetime, timedelta
 import asyncio
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -12,11 +13,39 @@ from backend.models import Job, Reel, Evaluation
 from trajectory.logger import TrajectoryLogger
 from agents import scout, fetch, transcript, ocr, writer, verifier, evaluator
 
+# Hard ceiling for one job. Render recycles free-tier web services and
+# redeploys kill the fire-and-forget runner mid-job; without this a wedged
+# job would sit in "running" forever.
+JOB_TIMEOUT_S = int(os.environ.get("JOB_TIMEOUT_S", "3600"))
+
+def recover_stale_jobs(db, current_job_id: int) -> list:
+    """Mark jobs stuck in 'running' by a DEAD process as 'error'.
+    A runner is spawned per job and sets its own job 'running' only after this
+    sweep, so any other 'running' job older than the grace window belongs to a
+    runner that died (deploy recycle, spin-down, crash)."""
+    cutoff = datetime.utcnow() - timedelta(minutes=10)
+    stale = (db.query(Job)
+             .filter(Job.status == "running",
+                     Job.id != current_job_id,
+                     Job.created_at < cutoff)
+             .all())
+    for j in stale:
+        j.status = "error"
+    if stale:
+        db.commit()
+    return [j.id for j in stale]
+
 def run_job(job_id: int):
     Base.metadata.create_all(engine)
     db = SessionLocal()
     job = db.get(Job, job_id)
+    if job is None:
+        raise RuntimeError(f"job {job_id} not found")
     traj = TrajectoryLogger(job_id=job_id)
+    recovered = recover_stale_jobs(db, job_id)
+    if recovered:
+        print(f"recovered stale 'running' jobs -> error: {recovered}")
+    deadline = time.time() + JOB_TIMEOUT_S
 
     if getattr(job, "reel_url", None):
         reel_url = job.reel_url.strip()
@@ -29,6 +58,11 @@ def run_job(job_id: int):
         db.commit()
         traj.reel_id = r.id
 
+        if time.time() > deadline:
+            job.status = "error"
+            db.commit()
+            raise RuntimeError(f"job {job_id} exceeded {JOB_TIMEOUT_S}s deadline")
+
         try:
             from extract_reel import download_via_igexport
             with traj.step("DownloadAgent", "igexport_download") as s:
@@ -39,12 +73,26 @@ def run_job(job_id: int):
             f = {
                 "shortcode": shortcode,
                 "url": reel_url,
-                "caption": "Instagram Reel",
-                "uploader": "unknown",
-                "upload_date": "",
+                # Real metadata when yt-dlp can read it, [unreadable] otherwise
+                # (CLAUDE.md rule 4 - never fabricate caption/metadata).
+                "caption": "[unreadable]",
+                "uploader": "[unreadable]",
+                "upload_date": "[unreadable]",
                 "like_count": 0,
                 "video_path": video_path,
             }
+            try:
+                from agents.tools import ytdlp_json
+                meta = ytdlp_json(reel_url)
+                f["caption"] = meta.get("description") or meta.get("title") or "[unreadable]"
+                f["uploader"] = meta.get("uploader") or meta.get("channel") or "[unreadable]"
+                f["upload_date"] = meta.get("upload_date") or "[unreadable]"
+                f["like_count"] = meta.get("like_count") or 0
+            except Exception as e:
+                with traj.step("FetchAgent", "metadata") as s:
+                    s.input = reel_url
+                    s.output = f"metadata unavailable: {e}"
+                print(f"metadata unavailable, using [unreadable]: {e}")
             with traj.step("TranscriptAgent", "transcribe") as s:
                 s.input = video_path
                 t = transcript.transcribe(video_path, shortcode)
@@ -109,6 +157,11 @@ def run_job(job_id: int):
         db.add(r); db.commit()
         traj.reel_id = r.id
 
+        if time.time() > deadline:
+            job.status = "error"
+            db.commit()
+            raise RuntimeError(f"job {job_id} exceeded {JOB_TIMEOUT_S}s deadline")
+
         try:
             with traj.step("FetchAgent", "fetch") as s:
                 s.input = url
@@ -135,7 +188,10 @@ def run_job(job_id: int):
             o = ocr.extract_text(f["video_path"], shortcode)
             s.output = f"frames={o['frames_extracted']} lines={len(o['lines'])}"
 
-        md_path = writer.write_md(out_dir, f, t, o)
+        with traj.step("WriterAgent", "write_md") as s:
+            s.input = f["shortcode"]
+            md_path = writer.write_md(out_dir, f, t, o)
+            s.output = md_path
 
         with traj.step("VerifierAgent", "verify") as s:
             s.input = md_path

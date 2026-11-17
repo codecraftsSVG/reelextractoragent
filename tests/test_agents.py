@@ -93,7 +93,9 @@ def _good_args(tmp_path, **over):
     args = dict(
         fetch={"video_path": str(dummy), "caption": "Test caption #hashtag",
                "url": "https://www.instagram.com/reel/abc/"},
-        transcript={"text": "Hello world", "avg_confidence": 0.8},
+        # avg_confidence is a mean no_speech_prob: lower = cleaner speech,
+        # so a "good" fixture uses a low value (V4 passes below 0.35).
+        transcript={"text": "Hello world", "avg_confidence": 0.1},
         ocr={"duration_s": 5.0, "raw": ["f1", "f2", "f3"], "lines": ["Test caption"]},
         md_path=_good_md(tmp_path),
         md_caption="Test caption #hashtag",
@@ -151,9 +153,27 @@ def test_verify_v3_whitespace_tolerant(tmp_path):
     assert "V3_caption_match" not in res["failed_checks"]
 
 
-def test_verify_v4_low_confidence_fails(tmp_path):
+def test_verify_v3_multiline_caption_matches(tmp_path):
+    # Instagram captions contain newlines; writer collapses them to one line.
+    # V3 must normalize both sides the same way or the match never succeeds.
+    args = _good_args(tmp_path)
+    args["fetch"] = dict(args["fetch"], caption="line one\nline two #hashtag")
+    args["md_caption"] = "line one line two #hashtag"
+    res = verify_reel(**args)
+    assert "V3_caption_match" not in res["failed_checks"]
+
+
+def test_verify_v4_low_no_speech_prob_passes(tmp_path):
+    # avg_confidence is a mean no_speech_prob: lower = cleaner speech.
     args = _good_args(tmp_path)
     args["transcript"] = {"text": "hi", "avg_confidence": 0.1}
+    res = verify_reel(**args)
+    assert "V4_transcript_confidence" not in res["failed_checks"]
+
+
+def test_verify_v4_high_no_speech_prob_fails(tmp_path):
+    args = _good_args(tmp_path)
+    args["transcript"] = {"text": "hi", "avg_confidence": 0.8}
     res = verify_reel(**args)
     assert "V4_transcript_confidence" in res["failed_checks"]
 
@@ -243,3 +263,15 @@ def test_write_md_creates_nested_dirs(tmp_path):
                   "upload_date": "", "like_count": 0, "caption": ""}
     path = write_md(str(tmp_path / "a" / "b" / "c"), fetch_data, {}, {})
     assert os.path.exists(path)
+
+
+def test_write_md_collapses_caption_newlines(tmp_path):
+    # A caption with embedded newlines would wrap in the rendered MD and never
+    # match fetch["caption"] in verifier V3 (permanent retry loop).
+    fetch_data = {"url": "u", "shortcode": "s3", "uploader": "x",
+                  "upload_date": "", "like_count": 0,
+                  "caption": "line one\nline two #tag"}
+    path = write_md(str(tmp_path), fetch_data, {}, {})
+    content = open(path).read()
+    assert "line one line two #tag" in content
+    assert "line one\nline two" not in content

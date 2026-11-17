@@ -1,10 +1,10 @@
 """ProfileScoutAgent: discover all reel URLs of a target user."""
 import re, requests
-from .tools import COOKIES
+from .tools import ensure_cookies, _cookie_path
 
 def _load_cookies() -> dict:
     jar = {}
-    with open(COOKIES) as f:
+    with open(ensure_cookies()) as f:
         for line in f:
             if line.startswith("#") or not line.strip():
                 continue
@@ -18,7 +18,8 @@ def discover_reels(username: str, max_pages: int = 50) -> dict:
     # Primary path: yt-dlp flat extraction (handles pagination + login)
     import subprocess, json
     r = subprocess.run(
-        ["yt-dlp", "--cookies", COOKIES, "--flat-playlist", "--dump-single-json",
+        ["yt-dlp", "--cookies", _cookie_path(), "--flat-playlist", "--dump-single-json",
+         "--sleep-requests", "5", "--sleep-interval", "10", "--retries", "3",
          f"https://www.instagram.com/{username}/reels/"],
         capture_output=True, text=True, timeout=600)
     if r.returncode != 0:

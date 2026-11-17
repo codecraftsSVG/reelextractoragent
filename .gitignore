@@ -1,10 +1,22 @@
+# Secrets and sensitive files to ignore
+.env
+.env.render
 credentials/
 storage/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
 .venv/
+venv/
 __pycache__/
 *.pyc
+
+# Node
 node_modules/
-.env
+
+# Binaries / media artifacts
+*.exe
 *.mp4
 *.png
-*.exe
