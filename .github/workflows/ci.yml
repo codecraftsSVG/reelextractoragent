@@ -174,9 +174,13 @@ jobs:
 
       - name: Smoke test the live service
         if: success()
+        env:
+          LIVE_BASE_URL: ${{ vars.LIVE_BASE_URL || 'https://reelextractoragent-wr3s.onrender.com' }}
         run: |
-          pip install requests
-          python test_deploy.py
+          HEALTH=$(curl --fail --silent --show-error "$LIVE_BASE_URL/health")
+          echo "$HEALTH" | jq -e '.status == "ok"'
+          JOBS=$(curl --fail --silent --show-error "$LIVE_BASE_URL/jobs")
+          echo "$JOBS" | jq -e 'type == "array"'
 
   # --- OPTIONAL: Manual post-deploy smoke check ---
   deploy-check:
@@ -188,6 +192,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install requests
       - name: Probe deployed service
-        run: python test_deploy.py
+        env:
+          LIVE_BASE_URL: ${{ vars.LIVE_BASE_URL || 'https://reelextractoragent-wr3s.onrender.com' }}
+        run: |
+          HEALTH=$(curl --fail --silent --show-error "$LIVE_BASE_URL/health")
+          echo "$HEALTH" | jq -e '.status == "ok"'
+          JOBS=$(curl --fail --silent --show-error "$LIVE_BASE_URL/jobs")
+          echo "$JOBS" | jq -e 'type == "array"'
