@@ -35,7 +35,7 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Run unit / api / integration tests (no network)
-        run: pytest -m "unit or api or integration"
+        run: pytest -m "not live"
 
       - name: Run live smoke tests (opt-in)
         if: vars.LIVE_TESTS == '1'
