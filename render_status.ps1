@@ -73,7 +73,9 @@ $deps = Get-Render "/services/$($hit.id)/deploys?limit=5"
 if ($deps) {
     foreach ($d in $deps) {
         $x = if ($d.deploy) { $d.deploy } else { $d }
-        $c = [string]$x.commit
+        $c = if ($x.commit -and $x.commit.id) { [string]$x.commit.id }
+             elseif ($x.commitId) { [string]$x.commitId }
+             else { [string]$x.commit }
         if ($c.Length -gt 8) { $c = $c.Substring(0, 8) }
         Write-Host ("  {0} | status={1} | created={2} | commit={3} | {4}" -f `
             $x.id, $x.status, $x.createdAt, $c, `
@@ -87,8 +89,9 @@ $envs = Get-Render "/services/$($hit.id)/env-vars"
 if ($envs) {
     $names = @()
     foreach ($e in $envs) {
-        if ($e.key) { $names += [string]$e.key }
-        elseif ($e.name) { $names += [string]$e.name }
+        $v = if ($e.envVar) { $e.envVar } else { $e }
+        if ($v.key) { $names += [string]$v.key }
+        elseif ($v.name) { $names += [string]$v.name }
     }
     $names = $names | Sort-Object
     Write-Host "  $($names.Count) keys: $($names -join ', ')"

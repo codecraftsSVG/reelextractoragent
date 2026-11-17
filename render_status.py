@@ -114,9 +114,12 @@ def main() -> int:
             if isinstance(d, dict) and "status" not in d:
                 # Unknown shape - dump keys once so the script stays debuggable
                 print(f"  (unexpected deploy fields: {sorted(d.keys())})")
+            commit = _pick(d, "commit", "commitId", default="")
+            if isinstance(commit, dict):
+                commit = _pick(commit, "id", "sha", "commitId", default="")
             print(f"  {_pick(d, 'id', default='?')} | status={_pick(d, 'status')} "
                   f"| created={_pick(d, 'createdAt')} "
-                  f"| commit={str(_pick(d, 'commit', 'commitId', default=''))[:8]} "
+                  f"| commit={str(commit)[:8]} "
                   f"| {str(_pick(d, 'statusDetails', 'message', default=''))[:120]}")
     else:
         print(f"  (none / unparseable) raw: {draw[:400]}")
@@ -125,8 +128,16 @@ def main() -> int:
     envs, eraw = _get(f"{BASE}/services/{sid}/env-vars", key)
     try:
         items = envs if isinstance(envs, list) else (envs or {}).get("envVars", [])
-        names = sorted(str(e.get("key") or e.get("name") or "?")
-                       for e in items if isinstance(e, dict))
+        names = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            env_var = item.get("envVar", item)
+            if isinstance(env_var, dict):
+                name = env_var.get("key") or env_var.get("name")
+                if name:
+                    names.append(str(name))
+        names.sort()
         print(f"[env-vars] {len(names)} keys set: {', '.join(names)}")
         for want in ("GEMINI_API_KEY", "COOKIES_TXT", "DATABASE_URL", "PYTHONUNBUFFERED"):
             print(f"  {'OK     ' if want in names else 'MISSING'} {want}")
