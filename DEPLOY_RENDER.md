@@ -3,7 +3,8 @@
 This repository is fully configured for deployment on [Render](https://render.com/) as a Docker Web Service.
 
 ## Prerequisites
-- A Render account (free tier is supported).
+- A Render account. The free tier is suitable for UI/API demos; reliable reel
+  extraction requires persistent storage and enough memory for Whisper.
 - Your repository pushed to GitHub or GitLab.
 
 ---
@@ -49,10 +50,11 @@ Environment:
   `# Netscape HTTP Cookie File` comment lines). Render's env-var box accepts a
   multi-line paste. Without it every fetch fails; rotating this value is how you
   recover from expired Instagram sessions.
-- `DATABASE_URL=sqlite:///./storage/reel.db` — SQLite on the mounted disk
-  (survives restarts). To use the Render managed Postgres instead, set its
-  `postgresql://...` connection string; `backend/database.py` rewrites it to
-  `postgresql+psycopg2://` automatically.
+- `DATABASE_URL` — use a persistent PostgreSQL database for deployed jobs.
+  The current `render.yaml` SQLite default is only safe on a persistent disk;
+  Render free web services have ephemeral filesystems, so job rows disappear
+  after a restart. `backend/database.py` accepts a `postgresql://` connection
+  string and rewrites it to `postgresql+psycopg2://`.
 - `JOB_TIMEOUT_S` (optional, default `3600`) — hard ceiling per job. A runner
   that passes the deadline marks its job `error` instead of hanging forever.
 
@@ -61,14 +63,17 @@ Environment:
   recycled on deploy; the log line `INFO: Shutting down` with no traceback
   means Render stopped the process, not that the app crashed. A request wakes
   the service again (first hit after idle pays the cold start).
-- **Jobs die with the process.** `POST /jobs` spawns `workers/runner.py` as a
-  fire-and-forget `subprocess.Popen`. If Render restarts the service while a
-  job is mid-pipeline, the child is killed and the job row stays `running`.
-  On the **next** job start, `workers/runner.py:recover_stale_jobs()` flips any
-  such stale `running` job (older than 10 min, not the current job) to `error`.
-  For reliable processing, run the runner as a separate Render **Background
-  Worker** (same image, queue-driven) or move to a real broker
-  (Celery/RQ/Arq). Until then, treat long jobs as best-effort.
+- **Jobs share the web service's resource limit.** `POST /jobs` starts
+  `workers/runner.py` as a child process in the web container. Whisper loads
+  PyTorch while Uvicorn is still running; on a small/free instance this can
+  exhaust memory and restart the whole service. The transcript agent limits
+  BLAS/OpenMP threads, but that is only a mitigation.
+- **Jobs and files need durable storage.** A Render restart kills the child
+  process. With SQLite on a free instance's ephemeral filesystem, the job row
+  and downloaded files are lost too. For reliable processing, use PostgreSQL
+  and run the runner as a separate Render **Background Worker** (same image,
+  queue-driven) or use a broker (Celery/RQ/Arq). These resources may require a
+  paid plan; until configured, long jobs remain best-effort.
 - **Reading the logs.** `[DfBMxNAp-wv] Attempting download via yt-dlp...`
   followed by `yt-dlp download successful!` = the authenticated download path
   works. A `0%|... | x/72.1M` progress bar with no completion line = the
@@ -99,5 +104,5 @@ $env:LIVE_BASE_URL="https://<your-service>.onrender.com"; python test_all_apis.p
 
 ## Database (PostgreSQL)
 - The codebase includes `psycopg2-binary` and dynamic database support in `backend/database.py`.
-- `render.yaml` is now configured to automatically provision a **Render Managed PostgreSQL Database** (`reeldb`) and link its connection string via `DATABASE_URL` to your web service.
+- The current `render.yaml` does not provision PostgreSQL; it sets SQLite as the default. Configure `DATABASE_URL` to a persistent PostgreSQL instance in the Render dashboard before relying on job history across restarts.
 

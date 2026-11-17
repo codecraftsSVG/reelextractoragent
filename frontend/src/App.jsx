@@ -2,6 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 
 const API = "";
 
+async function fetchJson(url, options) {
+  const response = await fetch(url, options);
+  if (!response.ok) throw new Error(`Request failed (${response.status})`);
+  return response.json();
+}
+
 function SubmitForm({ onSubmit }) {
   const [user, setUser] = useState("");
   const [mode, setMode] = useState("username");
@@ -74,15 +80,37 @@ function JobList({ jobs, selected, onSelect }) {
 
 function ReelGrid({ jobId, selectedReel, onSelectReel }) {
   const [detail, setDetail] = useState(null);
+  const [error, setError] = useState("");
   useEffect(() => {
-    if (!jobId) return;
-    fetch(`${API}/jobs/${jobId}`).then((r) => r.json()).then(setDetail);
-    const iv = setInterval(() => {
-      fetch(`${API}/jobs/${jobId}`).then((r) => r.json()).then(setDetail);
-    }, 4000);
-    return () => clearInterval(iv);
+    if (!jobId) {
+      setDetail(null);
+      setError("");
+      return;
+    }
+    let active = true;
+    const load = () => fetchJson(`${API}/jobs/${jobId}`)
+      .then((data) => {
+        if (!Array.isArray(data.reels)) throw new Error("Invalid job response");
+        if (active) {
+          setDetail(data);
+          setError("");
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setDetail(null);
+          setError("Job details are temporarily unavailable. The job may have been interrupted.");
+        }
+      });
+    load();
+    const iv = setInterval(load, 4000);
+    return () => {
+      active = false;
+      clearInterval(iv);
+    };
   }, [jobId]);
 
+  if (error) return <div role="alert" style={{ padding: 20 }}>{error}</div>;
   if (!detail) return null;
   return (
     <div style={{ padding: 20 }}>
@@ -141,17 +169,32 @@ function ReelSidebar({ reel }) {
 
 function Trajectory({ jobId }) {
   const [events, setEvents] = useState([]);
+  const [error, setError] = useState("");
   useEffect(() => {
     if (!jobId) return;
-    const load = () =>
-      fetch(`${API}/trajectory/${jobId}`).then((r) => r.json()).then(setEvents);
+    let active = true;
+    const load = () => fetchJson(`${API}/trajectory/${jobId}`)
+      .then((data) => {
+        if (!Array.isArray(data)) throw new Error("Invalid trajectory response");
+        if (active) {
+          setEvents(data);
+          setError("");
+        }
+      })
+      .catch(() => {
+        if (active) setError("Trajectory is temporarily unavailable.");
+      });
     load();
     const iv = setInterval(load, 4000);
-    return () => clearInterval(iv);
+    return () => {
+      active = false;
+      clearInterval(iv);
+    };
   }, [jobId]);
   return (
     <div style={{ padding: 20, fontFamily: "monospace", fontSize: 12 }}>
       <h3>Trajectory</h3>
+      {error && <div role="alert">{error}</div>}
       {events.map((e, i) => (
         <div key={i} style={{ color: e.status === "ok" ? "#333" : "#cf222e", marginBottom: 2 }}>
           [{e.at}] {e.agent}/{e.step} — {e.status} — {e.latency_ms}ms — {e.output}
@@ -163,11 +206,19 @@ function Trajectory({ jobId }) {
 
 export default function App() {
   const [jobs, setJobs] = useState([]);
+  const [jobsError, setJobsError] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const [selected, setSelected] = useState(null);
   const [selectedReel, setSelectedReel] = useState(null);
 
   const refresh = useCallback(() => {
-    fetch(`${API}/jobs`).then((r) => r.json()).then(setJobs);
+    return fetchJson(`${API}/jobs`)
+      .then((data) => {
+        if (!Array.isArray(data)) throw new Error("Invalid jobs response");
+        setJobs(data);
+        setJobsError("");
+      })
+      .catch(() => setJobsError("Jobs are temporarily unavailable."));
   }, []);
 
   useEffect(() => {
@@ -177,19 +228,29 @@ export default function App() {
   }, [refresh]);
 
   const submit = (user) => {
-    fetch(`${API}/jobs`, {
+    setSubmitError("");
+    fetchJson(`${API}/jobs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(user),
-    }).then((r) => r.json()).then((d) => { setSelected(d.job_id); setSelectedReel(null); refresh(); });
+    }).then((d) => {
+      if (!d.job_id) throw new Error("Invalid job response");
+      setSelected(d.job_id);
+      setSelectedReel(null);
+      refresh();
+    }).catch(() => setSubmitError("Could not start the job. Please retry when the service is available."));
   };
 
   return (
     <div style={{ maxWidth: 1250, margin: "0 auto", fontFamily: "system-ui" }}>
       <h1 style={{ padding: "20px 20px 0" }}>Reel Extractor</h1>
       <SubmitForm onSubmit={submit} />
+      {submitError && <div role="alert" style={{ padding: "0 20px" }}>{submitError}</div>}
       <div style={{ display: "flex" }}>
-        <div style={{ width: 300 }}><JobList jobs={jobs} selected={selected} onSelect={(id) => { setSelected(id); setSelectedReel(null); }} /></div>
+        <div style={{ width: 300 }}>
+          {jobsError && <div role="alert" style={{ padding: 20 }}>{jobsError}</div>}
+          <JobList jobs={jobs} selected={selected} onSelect={(id) => { setSelected(id); setSelectedReel(null); }} />
+        </div>
         <div style={{ flex: 1 }}>
           {selected && (
             <div style={{ display: "flex" }}>

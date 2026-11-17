@@ -164,8 +164,12 @@ def test_ocr_frames_unreadable_on_error(monkeypatch, tmp_path):
 
 def test_transcript_delegates(monkeypatch):
     import agents.transcript as tr
+    monkeypatch.setenv("OMP_NUM_THREADS", "8")
+    monkeypatch.setenv("MKL_NUM_THREADS", "8")
     monkeypatch.setattr(tr, "transcribe_audio", lambda p, s: {"text": "hi", "avg_confidence": 0.5, "segments": []})
     assert tr.transcribe("/v.mp4", "abc")["text"] == "hi"
+    assert os.environ["OMP_NUM_THREADS"] == "1"
+    assert os.environ["MKL_NUM_THREADS"] == "1"
 
 
 # ---------- Fetch agent ----------
