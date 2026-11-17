@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: ghcr.io/${{ github.repository }}
+  IMAGE_NAME: ghcr.io/codecraftsvg/reelextractoragent
 
 jobs:
   backend:
@@ -71,7 +71,7 @@ jobs:
       contents: read
       packages: write
     outputs:
-      image_tag: ${{ steps.meta.outputs.tag }}
+      image_tag: ${{ steps.deploy-tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
@@ -91,6 +91,10 @@ jobs:
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Set deploy image tag
+        id: deploy-tag
+        run: echo "tag=sha-${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -107,17 +111,14 @@ jobs:
     needs: [build-and-push]
     env:
       RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-      # Live service is reel-extractor -> reelextractoragent-wr3s; override via
-      # repo variable RENDER_SERVICE_NAME if the service is ever renamed.
-      RENDER_SERVICE_NAME: ${{ vars.RENDER_SERVICE_NAME || 'reelextractoragent' }}
+      RENDER_SERVICE_NAME: ${{ vars.RENDER_SERVICE_NAME || 'reelextractoragent-latest' }}
     steps:
       - name: Resolve Render service ID
         id: resolve
         run: |
           SERVICES=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
             "https://api.render.com/v1/services?limit=50")
-          # Match by exact service name OR by URL slug (e.g. reelextractoragent
-          # matches https://reelextractoragent-wr3s.onrender.com).
+          # Match by exact service name or its onrender.com URL slug.
           SERVICE_ID=$(echo "$SERVICES" | jq -r \
             ".[] | select(.service.name == \"$RENDER_SERVICE_NAME\" or ((.service.serviceDetails.url // \"\") | test(\"$RENDER_SERVICE_NAME\"))) | .service.id" | head -n1)
           if [ -z "$SERVICE_ID" ] || [ "$SERVICE_ID" = "null" ]; then
@@ -175,7 +176,7 @@ jobs:
       - name: Smoke test the live service
         if: success()
         env:
-          LIVE_BASE_URL: ${{ vars.LIVE_BASE_URL || 'https://reelextractoragent-wr3s.onrender.com' }}
+          LIVE_BASE_URL: ${{ vars.LIVE_BASE_URL || 'https://reelextractoragent-latest.onrender.com' }}
         run: |
           HEALTH=$(curl --fail --silent --show-error "$LIVE_BASE_URL/health")
           echo "$HEALTH" | jq -e '.status == "ok"'
@@ -194,7 +195,7 @@ jobs:
           python-version: "3.11"
       - name: Probe deployed service
         env:
-          LIVE_BASE_URL: ${{ vars.LIVE_BASE_URL || 'https://reelextractoragent-wr3s.onrender.com' }}
+          LIVE_BASE_URL: ${{ vars.LIVE_BASE_URL || 'https://reelextractoragent-latest.onrender.com' }}
         run: |
           HEALTH=$(curl --fail --silent --show-error "$LIVE_BASE_URL/health")
           echo "$HEALTH" | jq -e '.status == "ok"'
