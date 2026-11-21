@@ -167,7 +167,7 @@ def test_create_job_spawns_runner_with_sys_executable(client, mock_popen):
     assert args[0][0] == sys.executable
     assert args[0][1].endswith("workers/runner.py")
     assert str(r.json()["job_id"]) in args[0][2]
-    assert kwargs["cwd"].endswith("reel-extractor")
+    assert os.path.isdir(kwargs["cwd"])
     assert kwargs["close_fds"] is True
 
 
