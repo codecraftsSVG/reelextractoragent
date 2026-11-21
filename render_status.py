@@ -146,12 +146,12 @@ def main() -> int:
 
     # Live endpoints
     base = _norm_url(str(_pick(hit, "url", "serviceUrl", default=live_url)))
-    print(f"[live] base URL: {base}")
+    print(f"[live] base URL: {base} (waiting up to 90s for cold-start wake up)")
     for path in ("/health", "/jobs"):
         code, body = None, ""
         try:
             req = urllib.request.Request(base + path)
-            with urllib.request.urlopen(req, timeout=20) as r:
+            with urllib.request.urlopen(req, timeout=90) as r:
                 code = r.status
                 body = r.read().decode("utf-8", "replace")[:600]
         except Exception as e:

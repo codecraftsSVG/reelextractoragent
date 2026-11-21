@@ -104,10 +104,10 @@ if ($envs) {
 # --- Live endpoints ---
 $live = $hit.url; if (-not $live) { $live = $Url }
 if ($live -notmatch '^https?://') { $live = "https://$live" }
-Write-Host "[live] base URL: $live"
+Write-Host "[live] base URL: $live (waiting up to 90s for cold-start wake up)"
 foreach ($path in @("/health", "/jobs")) {
     try {
-        $r = Invoke-WebRequest -Uri "$live$path" -TimeoutSec 20 -UseBasicParsing
+        $r = Invoke-WebRequest -Uri "$live$path" -TimeoutSec 90 -UseBasicParsing
         $body = $r.Content
         if ($body.Length -gt 600) { $body = $body.Substring(0, 600) }
         Write-Host "[live] GET $live$path -> $($r.StatusCode) $body"

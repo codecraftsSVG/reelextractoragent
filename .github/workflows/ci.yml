@@ -111,16 +111,17 @@ jobs:
     needs: [build-and-push]
     env:
       RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-      RENDER_SERVICE_NAME: ${{ vars.RENDER_SERVICE_NAME || 'reelextractoragent-latest' }}
+      # Live service is reelextractoragent:latest -> reelextractoragent-wr3s.onrender.com
+      RENDER_SERVICE_NAME: ${{ vars.RENDER_SERVICE_NAME || 'reelextractoragent' }}
     steps:
       - name: Resolve Render service ID
         id: resolve
         run: |
           SERVICES=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
             "https://api.render.com/v1/services?limit=50")
-          # Match by exact service name or its onrender.com URL slug.
+          # Match by service name substring or its onrender.com URL slug
           SERVICE_ID=$(echo "$SERVICES" | jq -r \
-            ".[] | select(.service.name == \"$RENDER_SERVICE_NAME\" or ((.service.serviceDetails.url // \"\") | test(\"$RENDER_SERVICE_NAME\"))) | .service.id" | head -n1)
+            ".[] | select(((.service.name // \"\") | test(\"$RENDER_SERVICE_NAME\")) or ((.service.serviceDetails.url // \"\") | test(\"$RENDER_SERVICE_NAME\"))) | .service.id" | head -n1)
           if [ -z "$SERVICE_ID" ] || [ "$SERVICE_ID" = "null" ]; then
             echo "Could not find Render service named or slug '$RENDER_SERVICE_NAME'"
             echo "$SERVICES" | jq -r '.[] | "  \(.service.name) -> \(.service.serviceDetails.url // "?")"'
@@ -176,7 +177,7 @@ jobs:
       - name: Smoke test the live service
         if: success()
         env:
-          LIVE_BASE_URL: ${{ vars.LIVE_BASE_URL || 'https://reelextractoragent-latest.onrender.com' }}
+          LIVE_BASE_URL: ${{ vars.LIVE_BASE_URL || 'https://reelextractoragent-wr3s.onrender.com' }}
         run: |
           HEALTH=$(curl --fail --silent --show-error "$LIVE_BASE_URL/health")
           echo "$HEALTH" | jq -e '.status == "ok"'
@@ -195,7 +196,7 @@ jobs:
           python-version: "3.11"
       - name: Probe deployed service
         env:
-          LIVE_BASE_URL: ${{ vars.LIVE_BASE_URL || 'https://reelextractoragent-latest.onrender.com' }}
+          LIVE_BASE_URL: ${{ vars.LIVE_BASE_URL || 'https://reelextractoragent-wr3s.onrender.com' }}
         run: |
           HEALTH=$(curl --fail --silent --show-error "$LIVE_BASE_URL/health")
           echo "$HEALTH" | jq -e '.status == "ok"'
