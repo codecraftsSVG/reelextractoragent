@@ -167,6 +167,21 @@ def test_create_job_spawns_runner_with_sys_executable(client, mock_popen):
     assert args[0][0] == sys.executable
     assert args[0][1].endswith("workers/runner.py")
     assert str(r.json()["job_id"]) in args[0][2]
+    assert kwargs["cwd"].endswith("reel-extractor")
+    assert kwargs["close_fds"] is True
+
+
+def test_create_job_runner_launch_failure_marks_error(client, monkeypatch):
+    import subprocess
+    def fail(*args, **kwargs):
+        raise OSError("runner unavailable")
+    monkeypatch.setattr(subprocess, "Popen", fail)
+    r = client.post("/jobs", json={"reel_url": "https://www.instagram.com/reel/abc123XYZ/"})
+    assert r.status_code == 503
+    db = SessionLocal()
+    job = db.query(Job).filter(Job.reel_url == "https://www.instagram.com/reel/abc123XYZ/").one()
+    assert job.status == "error"
+    db.close()
 
 
 def test_create_job_invalid_json(client):

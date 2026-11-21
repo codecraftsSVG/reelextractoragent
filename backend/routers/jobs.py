@@ -4,8 +4,38 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from ..models import Job, Reel, Evaluation
+from datetime import datetime, timedelta, timezone
 
 router = APIRouter()
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+
+def spawn_runner(job_id: int) -> subprocess.Popen:
+    log_dir = os.path.join(ROOT_DIR, "storage", "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    stdout = open(os.path.join(log_dir, f"runner-{job_id}.out"), "ab")
+    stderr = open(os.path.join(log_dir, f"runner-{job_id}.err"), "ab")
+    try:
+        return subprocess.Popen(
+            [sys.executable, "workers/runner.py", str(job_id)],
+            cwd=ROOT_DIR,
+            stdout=stdout,
+            stderr=stderr,
+            close_fds=True,
+        )
+    finally:
+        stdout.close()
+        stderr.close()
+
+def recover_stale_jobs(db: Session) -> list:
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=10)
+    stale = (db.query(Job)
+             .filter(Job.status == "running", Job.created_at < cutoff)
+             .all())
+    for job in stale:
+        job.status = "error"
+    if stale:
+        db.commit()
+    return [job.id for job in stale]
 
 def get_db():
     db = SessionLocal()
@@ -36,9 +66,13 @@ def create_job(payload: JobIn, db: Session = Depends(get_db)):
         job = Job(target_user=f"@{target_user}", reel_url=None, status="queued")
     db.add(job)
     db.commit()
-    # Fire-and-forget runner (use Celery in production)
-    subprocess.Popen([sys.executable, "workers/runner.py", str(job.id)],
-                     cwd=os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    try:
+        spawn_runner(job.id)
+    except Exception as exc:
+        job.status = "error"
+        db.commit()
+        from fastapi import HTTPException
+        raise HTTPException(status_code=503, detail=f"Could not start the job: {exc}")
     return {"job_id": job.id}
 
 @router.get("")

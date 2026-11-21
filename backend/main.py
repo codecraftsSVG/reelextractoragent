@@ -3,10 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
-from .database import Base, engine, ensure_job_reel_url_column, ensure_trajectory_columns
+from .database import Base, engine, SessionLocal, ensure_job_reel_url_column, ensure_trajectory_columns
 from .routers import jobs, trajectory
+from .models import Job
 from trajectory.app_logger import setup_logging, get_logger
 from trajectory.error_middleware import GlobalErrorMiddleware
+from datetime import datetime, timedelta, timezone
 
 setup_logging()
 logger = get_logger("API")
@@ -23,6 +25,28 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 app.mount("/storage", StaticFiles(directory="storage"), name="storage")
 app.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 app.include_router(trajectory.router, prefix="/trajectory", tags=["trajectory"])
+
+@app.on_event("startup")
+def recover_deployed_jobs():
+    db = SessionLocal()
+    try:
+        cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=10)
+        stale = db.query(Job).filter(Job.status == "running", Job.created_at < cutoff).all()
+        for job in stale:
+            job.status = "error"
+        if stale:
+            db.commit()
+
+        queued = db.query(Job).filter(Job.status == "queued").order_by(Job.id).all()
+        for job in queued:
+            try:
+                jobs.spawn_runner(job.id)
+            except Exception as exc:
+                job.status = "error"
+                db.commit()
+                logger.error("Could not recover queued job %s: %s", job.id, exc)
+    finally:
+        db.close()
 
 @app.get("/health")
 def health():

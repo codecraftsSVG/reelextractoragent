@@ -5,7 +5,8 @@ const API = "";
 async function fetchJson(url, options) {
   const response = await fetch(url, options);
   if (!response.ok) throw new Error(`Request failed (${response.status})`);
-  return response.json();
+  const data = await response.json();
+  return data;
 }
 
 function SubmitForm({ onSubmit }) {
@@ -58,10 +59,11 @@ function scoreColor(score) {
 }
 
 function JobList({ jobs, selected, onSelect }) {
+  const rows = Array.isArray(jobs) ? jobs : [];
   return (
     <div style={{ padding: 20 }}>
       <h3>Jobs</h3>
-      {jobs.map((j) => (
+      {rows.map((j) => (
         <div
           key={j.id}
           onClick={() => onSelect(j.id)}
@@ -88,22 +90,28 @@ function ReelGrid({ jobId, selectedReel, onSelectReel }) {
       return;
     }
     let active = true;
+    let failures = 0;
     const load = () => fetchJson(`${API}/jobs/${jobId}`)
       .then((data) => {
-        if (!Array.isArray(data.reels)) throw new Error("Invalid job response");
+        if (!data || !Array.isArray(data.reels)) throw new Error("Invalid job response");
         if (active) {
           setDetail(data);
           setError("");
+          failures = 0;
         }
       })
       .catch(() => {
         if (active) {
-          setDetail(null);
-          setError("Job details are temporarily unavailable. The job may have been interrupted.");
+          failures += 1;
+          setError(failures >= 3
+            ? "Job details are temporarily unavailable. The service may be restarting."
+            : "");
         }
       });
     load();
-    const iv = setInterval(load, 4000);
+    const iv = setInterval(() => {
+      load();
+    }, 4000);
     return () => {
       active = false;
       clearInterval(iv);

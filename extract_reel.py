@@ -38,6 +38,8 @@ async def download_via_igexport(reel_url: str, shortcode: str) -> str:
             return video_path
         else:
             print(f"[{shortcode}] yt-dlp failed or output too small: {res.stderr}")
+            if "429" in (res.stderr or "") or "Too Many Requests" in (res.stderr or ""):
+                raise RuntimeError("Instagram download is rate-limited (HTTP 429). Retry later.")
     except Exception as e:
         print(f"[{shortcode}] yt-dlp exception: {e}")
 
