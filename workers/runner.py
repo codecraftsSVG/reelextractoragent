@@ -12,6 +12,11 @@ from backend.database import SessionLocal, Base, engine
 from backend.models import Job, Reel, Evaluation
 from trajectory.logger import TrajectoryLogger
 from agents import scout, fetch, transcript, ocr, writer, verifier, evaluator
+try:
+    from backend.oci_storage import upload_file_to_oci
+except ImportError:
+    upload_file_to_oci = None
+
 
 # Hard ceiling for one job. Render recycles free-tier web services and
 # redeploys kill the fire-and-forget runner mid-job; without this a wedged
@@ -128,6 +133,15 @@ def run_job(job_id: int):
                 db.add(Evaluation(reel_id=r.id, criterion=crit, score=sc,
                                   justification=ev["justification"][:500]))
             job.done_reels = 1
+            # Sync output files to OCI Object Storage if configured
+            if upload_file_to_oci:
+                try:
+                    upload_file_to_oci(md_path, object_name=f"output/@reel-{shortcode}/{os.path.basename(md_path)}")
+                    if os.path.exists(video_path):
+                        upload_file_to_oci(video_path, object_name=f"downloads/{os.path.basename(video_path)}")
+                except Exception as oci_err:
+                    print(f"OCI upload warning: {oci_err}")
+
             job.status = "done"
             db.commit()
             print(f"Job {job_id} complete -> {md_path}")

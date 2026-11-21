@@ -16,3 +16,4 @@ playwright
 imageio-ffmpeg
 python-dotenv
 opik
+boto3

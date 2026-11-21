@@ -1,6 +1,9 @@
 """End-to-end reel downloader and extractor using igexport.com and local pipeline agents."""
 import os
 import sys
+from dotenv import load_dotenv
+load_dotenv()
+
 import urllib.request
 import asyncio
 from playwright.async_api import async_playwright
@@ -8,6 +11,11 @@ from playwright.async_api import async_playwright
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from agents import transcript, ocr, writer, verifier, evaluator
 from agents.tools import _cookie_path
+try:
+    from backend.oci_storage import upload_file_to_oci
+except ImportError:
+    upload_file_to_oci = None
+
 
 DOWNLOADS_DIR = os.path.abspath("storage/downloads")
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
@@ -140,6 +148,16 @@ def process_reel(reel_url: str, caption: str | None = None, uploader: str | None
         o = o2
 
     ev = evaluator.score(fetch_data, t, o, v)
+    # 6. Sync to OCI Object Storage if configured
+    if upload_file_to_oci:
+        try:
+            upload_file_to_oci(md_path, object_name=f"output/@reel-{shortcode}/{os.path.basename(md_path)}")
+            if os.path.exists(video_path):
+                upload_file_to_oci(video_path, object_name=f"downloads/{os.path.basename(video_path)}")
+            print(f"[{shortcode}] Successfully synced output files to OCI Object Storage!")
+        except Exception as oci_err:
+            print(f"[{shortcode}] OCI upload warning: {oci_err}")
+
 
     print(f"[{shortcode}] Complete! Video: {video_path} | Markdown: {md_path} | Score: {ev['total']}")
     return {
