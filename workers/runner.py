@@ -86,8 +86,8 @@ def run_job(job_id: int):
             with traj.step("FetchAgent", "metadata") as s:
                 s.input = reel_url
                 try:
-                    from agents.tools import ytdlp_json
-                    meta = ytdlp_json(reel_url)
+                    import agents.tools as _tools
+                    meta = _tools.ytdlp_json(reel_url)
                     f["caption"] = meta.get("description") or meta.get("title") or "[unreadable]"
                     f["uploader"] = meta.get("uploader") or meta.get("channel") or "[unreadable]"
                     f["upload_date"] = meta.get("upload_date") or "[unreadable]"
